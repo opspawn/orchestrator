@@ -66,8 +66,16 @@
   .event-agent { color: var(--purple); min-width: 60px; }
   .event-action { color: var(--accent); }
 
-  .kb-list { display: flex; flex-wrap: wrap; gap: 8px; }
-  .kb-tag { background: var(--border); color: var(--text); padding: 4px 12px; border-radius: 16px; font-size: 13px; }
+  .kb-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .kb-tag { background: var(--border); color: var(--text); padding: 4px 12px; border-radius: 16px; font-size: 13px; cursor: pointer; border: 1px solid transparent; transition: border-color 0.2s; }
+  .kb-tag:hover { border-color: var(--accent); }
+  .kb-tag.active { border-color: var(--accent); background: rgba(88,166,255,0.15); }
+  .kb-viewer { margin-top: 8px; }
+  .kb-content { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto; }
+  .kb-content h1, .kb-content h2, .kb-content h3 { font-family: inherit; margin: 8px 0 4px; color: var(--accent); }
+  .kb-toolbar { display: flex; gap: 6px; margin-top: 8px; }
+  .kb-editor { width: 100%; min-height: 250px; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 12px; border-radius: 6px; font-size: 13px; font-family: monospace; line-height: 1.6; resize: vertical; }
+  .kb-editor:focus { border-color: var(--accent); outline: none; }
 
   .lock-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
   .lock-row:last-child { border-bottom: none; }
@@ -184,9 +192,24 @@
     <div class="card-body" id="events"><div class="empty">Loading...</div></div>
   </div>
 
-  <div class="card">
-    <div class="card-header">Knowledge Base</div>
+  <div class="card full">
+    <div class="card-header">Knowledge Base <button class="btn btn-accent btn-sm" style="margin-left:auto" onclick="showKBEditor()">+ New Topic</button></div>
     <div class="card-body" id="knowledge"><div class="empty">Loading...</div></div>
+  </div>
+
+  <!-- KB Editor Modal -->
+  <div class="modal-overlay" id="kb-modal" onclick="if(event.target===this)closeKBModal()">
+    <div class="modal" style="width:600px">
+      <h3 id="kb-modal-title">New Knowledge Entry</h3>
+      <label>Topic (filename without .md)</label>
+      <input type="text" id="kb-topic" placeholder="e.g. architecture-decisions">
+      <label>Content (Markdown)</label>
+      <textarea class="kb-editor" id="kb-editor-content" placeholder="# Topic Title&#10;&#10;Write your knowledge entry here..."></textarea>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeKBModal()">Cancel</button>
+        <button class="btn btn-accent" onclick="saveKBEntry()">Save</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -305,9 +328,20 @@ async function refresh() {
     if (d.knowledge_topics.length === 0) {
       kbEl.innerHTML = '<div class="empty">No knowledge entries</div>';
     } else {
-      kbEl.innerHTML = '<div class="kb-list">' +
-        d.knowledge_topics.map(t => `<span class="kb-tag">${esc(t)}</span>`).join('') +
-        '</div>';
+      const tagHtml = d.knowledge_topics.map(t =>
+        `<span class="kb-tag${activeKBTopic === t ? ' active' : ''}" onclick="viewKBTopic('${esc(t)}')">${esc(t)}</span>`
+      ).join('');
+      const viewerHtml = activeKBTopic && activeKBContent !== null
+        ? `<div class="kb-viewer">
+            <div class="kb-content">${esc(activeKBContent)}</div>
+            <div class="kb-toolbar">
+              <button class="btn btn-accent btn-sm" onclick="editKBTopic('${esc(activeKBTopic)}')">Edit</button>
+              <button class="btn btn-sm" style="color:var(--red)" onclick="deleteKBTopic('${esc(activeKBTopic)}')">Delete</button>
+              <button class="btn btn-sm" onclick="closeKBViewer()">Close</button>
+            </div>
+          </div>`
+        : '';
+      kbEl.innerHTML = '<div class="kb-list">' + tagHtml + '</div>' + viewerHtml;
     }
   } catch (e) {
     console.error('Refresh failed:', e);
@@ -326,6 +360,8 @@ function timeAgo(iso) {
 // State for modals and open forms
 let claimWs = '', claimId = '';
 let openAddForms = new Set(); // track which workstream add-task forms are open
+let activeKBTopic = null, activeKBContent = null;
+let kbEditMode = false; // true = editing existing, false = creating new
 
 function showAddWorkstream() {
   document.getElementById('ws-name').value = '';
@@ -403,6 +439,87 @@ async function completeTask(wsName, taskId) {
     body: JSON.stringify({})
   });
   refresh();
+}
+
+// --- Knowledge Base functions ---
+async function viewKBTopic(topic) {
+  if (activeKBTopic === topic) { closeKBViewer(); return; }
+  try {
+    const res = await fetch('/api/knowledge/' + encodeURIComponent(topic));
+    if (!res.ok) throw new Error('Not found');
+    const data = await res.json();
+    activeKBTopic = topic;
+    activeKBContent = data.content;
+    refresh();
+  } catch (e) {
+    console.error('Failed to load topic:', e);
+  }
+}
+
+function closeKBViewer() {
+  activeKBTopic = null;
+  activeKBContent = null;
+  refresh();
+}
+
+function showKBEditor(topic, content) {
+  const titleEl = document.getElementById('kb-modal-title');
+  const topicEl = document.getElementById('kb-topic');
+  const editorEl = document.getElementById('kb-editor-content');
+  if (topic) {
+    titleEl.textContent = 'Edit: ' + topic;
+    topicEl.value = topic;
+    topicEl.readOnly = true;
+    editorEl.value = content || '';
+    kbEditMode = true;
+  } else {
+    titleEl.textContent = 'New Knowledge Entry';
+    topicEl.value = '';
+    topicEl.readOnly = false;
+    editorEl.value = '';
+    kbEditMode = false;
+  }
+  document.getElementById('kb-modal').classList.add('show');
+  (topic ? editorEl : topicEl).focus();
+}
+
+function closeKBModal() {
+  document.getElementById('kb-modal').classList.remove('show');
+}
+
+function editKBTopic(topic) {
+  showKBEditor(topic, activeKBContent);
+}
+
+async function saveKBEntry() {
+  const topic = document.getElementById('kb-topic').value.trim();
+  const content = document.getElementById('kb-editor-content').value;
+  if (!topic || !content) return;
+  try {
+    await fetch('/api/knowledge/' + encodeURIComponent(topic), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, agent: 'dashboard' })
+    });
+    closeKBModal();
+    activeKBTopic = topic;
+    activeKBContent = content;
+    refresh();
+  } catch (e) {
+    console.error('Failed to save:', e);
+  }
+}
+
+async function deleteKBTopic(topic) {
+  if (!confirm('Delete knowledge entry "' + topic + '"?')) return;
+  try {
+    await fetch('/api/knowledge/' + encodeURIComponent(topic), { method: 'DELETE' });
+    activeKBTopic = null;
+    activeKBContent = null;
+    refresh();
+  } catch (e) {
+    console.error('Failed to delete:', e);
+  }
 }
 
 refresh();

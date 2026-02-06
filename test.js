@@ -126,6 +126,11 @@ test('Knowledge base', () => {
 
   const topics = orc.listKnowledge();
   assert(topics.includes('test-topic'), 'Topic listed');
+
+  const deleted = orc.deleteKnowledge('test-topic');
+  assert(deleted === true, 'Topic deleted');
+  assert(orc.readKnowledge('test-topic') === null, 'Deleted topic returns null');
+  assert(orc.deleteKnowledge('nonexistent') === false, 'Delete nonexistent returns false');
 });
 
 test('Event log', () => {

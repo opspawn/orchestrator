@@ -281,6 +281,14 @@ function readKnowledge(topic) {
   return fs.readFileSync(filePath, 'utf8');
 }
 
+function deleteKnowledge(topic, agentId = 'system') {
+  const filePath = path.join(KNOWLEDGE_DIR, `${topic}.md`);
+  if (!fs.existsSync(filePath)) return false;
+  fs.unlinkSync(filePath);
+  logEvent(agentId, 'knowledge_deleted', { topic });
+  return true;
+}
+
 function listKnowledge() {
   return fs.readdirSync(KNOWLEDGE_DIR)
     .filter(f => f.endsWith('.md'))
@@ -375,6 +383,7 @@ module.exports = {
   releaseLock,
   writeKnowledge,
   readKnowledge,
+  deleteKnowledge,
   listKnowledge,
   status,
   statusText

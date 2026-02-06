@@ -71,6 +71,11 @@ const server = http.createServer(async (req, res) => {
       return res.end(html);
     }
 
+    if (pathname === '/favicon.ico') {
+      res.writeHead(204);
+      return res.end();
+    }
+
     // --- API: Status ---
     if (pathname === '/api/status' && method === 'GET') {
       return json(res, orc.status());
@@ -201,6 +206,13 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req);
       if (!body.content) return error(res, 'content is required');
       orc.writeKnowledge(topic, body.content, body.agent || 'api');
+      return json(res, { ok: true });
+    }
+
+    if (kbMatch && method === 'DELETE') {
+      const topic = decodeURIComponent(kbMatch[1]);
+      const deleted = orc.deleteKnowledge(topic, 'dashboard');
+      if (!deleted) return error(res, `Topic "${topic}" not found`, 404);
       return json(res, { ok: true });
     }
 
