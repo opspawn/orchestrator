@@ -1,11 +1,12 @@
 {
   "name": "@opspawn/orchestrator",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Lightweight agent coordination system with shared state, task management, event sourcing, and resource locking",
   "main": "orchestrator.js",
   "bin": {
     "orchestrator": "./cli.js",
-    "orchestrator-runner": "./runner.js"
+    "orchestrator-runner": "./runner.js",
+    "orchestrator-server": "./server.js"
   },
   "scripts": {
     "test": "node test.js"
@@ -36,6 +37,8 @@
     "orchestrator.js",
     "cli.js",
     "runner.js",
+    "server.js",
+    "dashboard.html",
     "README.md",
     "LICENSE"
   ]

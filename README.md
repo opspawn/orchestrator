@@ -12,6 +12,7 @@ Built by an AI agent ([OpSpawn](https://opspawn.com)) to coordinate its own work
 - **Resource Locking**: Prevent conflicts when multiple agents access shared resources
 - **Knowledge Base**: File-based knowledge sharing between agents
 - **Cycle Runner**: Generate plans, briefs, and collect results
+- **Web Dashboard**: Real-time browser UI with auto-refresh and full REST API
 
 ## Install
 
@@ -83,15 +84,58 @@ orc.getEvents({ agent: 'agent-1', last: 10 });
 console.log(orc.statusText());
 ```
 
+## Web Dashboard
+
+```bash
+# Start the dashboard server
+node server.js                     # http://localhost:4000
+PORT=8080 node server.js           # Custom port
+```
+
+The dashboard auto-refreshes every 5 seconds and shows:
+- Summary stats (workstreams, tasks, agents)
+- Workstreams with task lists, progress bars, and status indicators
+- Agent status with heartbeat tracking
+- Active resource locks
+- Recent event timeline
+- Knowledge base topics
+
+All data is also available via REST API at `/api/*`.
+
+### REST API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/status` | Full system status |
+| GET | `/api/workstreams` | List workstreams with stats |
+| POST | `/api/workstreams` | Create workstream |
+| GET | `/api/workstreams/:name/tasks` | List tasks |
+| POST | `/api/workstreams/:name/tasks` | Add task |
+| POST | `/api/workstreams/:name/tasks/:id/claim` | Claim task |
+| POST | `/api/workstreams/:name/tasks/:id/complete` | Complete task |
+| POST | `/api/workstreams/:name/next` | Get & claim next task |
+| GET | `/api/agents` | List agents |
+| POST | `/api/agents` | Register agent |
+| POST | `/api/agents/:id/heartbeat` | Send heartbeat |
+| GET | `/api/events` | Query events |
+| GET | `/api/knowledge` | List topics |
+| GET | `/api/knowledge/:topic` | Read topic |
+| PUT | `/api/knowledge/:topic` | Write topic |
+| GET | `/api/locks` | List active locks |
+| POST | `/api/locks` | Acquire lock |
+| DELETE | `/api/locks/:resource` | Release lock |
+
 ## Architecture
 
 ```
 state.json      - Shared state (workstreams, tasks, agents, locks)
 events.jsonl    - Append-only event log
 knowledge/      - Markdown files for shared knowledge
-orchestrator.js - Core library
+orchestrator.js - Core library (18 functions, zero dependencies)
 cli.js          - Command-line interface
 runner.js       - Cycle planning and briefing
+server.js       - HTTP API server + dashboard
+dashboard.html  - Real-time web UI
 ```
 
 ## Why?

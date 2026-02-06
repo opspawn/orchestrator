@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpSpawn Orchestrator</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #7d8590; --accent: #58a6ff;
+    --green: #3fb950; --yellow: #d29922; --red: #f85149;
+    --purple: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  a { color: var(--accent); text-decoration: none; }
+
+  .header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header h1 span { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 13px; }
+  .meta .live { color: var(--green); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 24px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .card-body { padding: 16px; }
+  .card.full { grid-column: 1 / -1; }
+
+  .ws { margin-bottom: 16px; }
+  .ws:last-child { margin-bottom: 0; }
+  .ws-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer; }
+  .ws-name { font-weight: 600; font-size: 15px; }
+  .ws-priority { background: var(--accent); color: #000; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
+  .ws-stats { color: var(--muted); font-size: 13px; margin-left: auto; }
+
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 8px; }
+  .progress-fill { height: 100%; background: var(--green); transition: width 0.3s; }
+
+  .task-list { list-style: none; }
+  .task { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .task:last-child { border-bottom: none; }
+  .task-status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .task-status.pending { background: var(--muted); }
+  .task-status.in_progress { background: var(--yellow); }
+  .task-status.done { background: var(--green); }
+  .task-title { flex: 1; }
+  .task-title.done { color: var(--muted); text-decoration: line-through; }
+  .task-agent { color: var(--purple); font-size: 12px; }
+  .task-id { color: var(--muted); font-size: 11px; font-family: monospace; }
+
+  .agent-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .agent-row:last-child { border-bottom: none; }
+  .agent-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .agent-dot.active { background: var(--green); }
+  .agent-dot.stale { background: var(--red); }
+  .agent-name { font-weight: 500; font-size: 14px; }
+  .agent-type { color: var(--muted); font-size: 12px; }
+  .agent-seen { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  .event-row { display: flex; gap: 8px; padding: 4px 0; font-size: 13px; font-family: monospace; border-bottom: 1px solid var(--border); }
+  .event-row:last-child { border-bottom: none; }
+  .event-time { color: var(--muted); white-space: nowrap; }
+  .event-agent { color: var(--purple); min-width: 60px; }
+  .event-action { color: var(--accent); }
+
+  .kb-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .kb-tag { background: var(--border); color: var(--text); padding: 4px 12px; border-radius: 16px; font-size: 13px; }
+
+  .lock-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .lock-row:last-child { border-bottom: none; }
+  .lock-icon { color: var(--yellow); }
+
+  .empty { color: var(--muted); font-size: 13px; font-style: italic; }
+
+  .summary-row { display: flex; gap: 24px; padding: 16px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .summary-stat { text-align: center; }
+  .summary-stat .num { font-size: 28px; font-weight: 700; }
+  .summary-stat .label { font-size: 12px; color: var(--muted); text-transform: uppercase; }
+  .summary-stat .num.green { color: var(--green); }
+  .summary-stat .num.yellow { color: var(--yellow); }
+  .summary-stat .num.muted { color: var(--muted); }
+  .summary-stat .num.accent { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>&#9670;</span> OpSpawn Orchestrator</h1>
+  <div class="meta">
+    <span class="live">&#9679;</span> Auto-refresh 5s &middot;
+    v<span id="version">-</span> &middot;
+    Updated <span id="updated">-</span>
+  </div>
+</div>
+
+<div class="summary-row">
+  <div class="summary-stat"><div class="num accent" id="s-workstreams">-</div><div class="label">Workstreams</div></div>
+  <div class="summary-stat"><div class="num muted" id="s-pending">-</div><div class="label">Pending</div></div>
+  <div class="summary-stat"><div class="num yellow" id="s-active">-</div><div class="label">In Progress</div></div>
+  <div class="summary-stat"><div class="num green" id="s-done">-</div><div class="label">Completed</div></div>
+  <div class="summary-stat"><div class="num accent" id="s-agents">-</div><div class="label">Agents</div></div>
+  <div class="summary-stat"><div class="num" id="s-events">-</div><div class="label">Events</div></div>
+</div>
+
+<div class="grid">
+  <div class="card full">
+    <div class="card-header">Workstreams &amp; Tasks</div>
+    <div class="card-body" id="workstreams"><div class="empty">Loading...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Agents</div>
+    <div class="card-body" id="agents"><div class="empty">Loading...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Active Locks</div>
+    <div class="card-body" id="locks"><div class="empty">Loading...</div></div>
+  </div>
+
+  <div class="card full">
+    <div class="card-header">Recent Events</div>
+    <div class="card-body" id="events"><div class="empty">Loading...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Knowledge Base</div>
+    <div class="card-body" id="knowledge"><div class="empty">Loading...</div></div>
+  </div>
+</div>
+
+<script>
+async function refresh() {
+  try {
+    const res = await fetch('/api/status');
+    if (!res.ok) throw new Error('fetch failed');
+    const d = await res.json();
+
+    document.getElementById('version').textContent = d.version;
+    document.getElementById('updated').textContent = timeAgo(d.updated_at);
+
+    // Summary
+    let totalPending = 0, totalActive = 0, totalDone = 0;
+    d.workstreams.forEach(ws => { totalPending += ws.pending; totalActive += ws.in_progress; totalDone += ws.done; });
+    document.getElementById('s-workstreams').textContent = d.workstreams.length;
+    document.getElementById('s-pending').textContent = totalPending;
+    document.getElementById('s-active').textContent = totalActive;
+    document.getElementById('s-done').textContent = totalDone;
+    document.getElementById('s-agents').textContent = d.agents.length;
+    document.getElementById('s-events').textContent = d.recent_events.length;
+
+    // Workstreams
+    const wsEl = document.getElementById('workstreams');
+    if (d.workstreams.length === 0) {
+      wsEl.innerHTML = '<div class="empty">No workstreams configured</div>';
+    } else {
+      wsEl.innerHTML = d.workstreams.map(ws => {
+        const total = ws.task_count || 1;
+        const pct = Math.round((ws.done / total) * 100);
+        const tasks = (ws.tasks || []).sort((a, b) => {
+          const order = { in_progress: 0, pending: 1, done: 2 };
+          return (order[a.status] ?? 1) - (order[b.status] ?? 1) || a.priority - b.priority;
+        });
+        return `<div class="ws">
+          <div class="ws-header">
+            <span class="ws-priority">P${ws.priority}</span>
+            <span class="ws-name">${esc(ws.name)}</span>
+            ${ws.description ? `<span style="color:var(--muted);font-size:13px">${esc(ws.description)}</span>` : ''}
+            <span class="ws-stats">${ws.pending}p / ${ws.in_progress}a / ${ws.done}d</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <ul class="task-list">${tasks.map(t => `<li class="task">
+            <span class="task-status ${t.status}"></span>
+            <span class="task-title ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</span>
+            ${t.assigned_to ? `<span class="task-agent">${esc(t.assigned_to)}</span>` : ''}
+            <span class="task-id">${t.id}</span>
+          </li>`).join('')}</ul>
+        </div>`;
+      }).join('');
+    }
+
+    // Agents
+    const agEl = document.getElementById('agents');
+    if (d.agents.length === 0) {
+      agEl.innerHTML = '<div class="empty">No agents registered</div>';
+    } else {
+      agEl.innerHTML = d.agents.map(a => `<div class="agent-row">
+        <span class="agent-dot ${a.stale ? 'stale' : 'active'}"></span>
+        <span class="agent-name">${esc(a.id)}</span>
+        <span class="agent-type">${esc(a.type)}</span>
+        <span class="agent-seen">${timeAgo(a.last_seen)}</span>
+      </div>`).join('');
+    }
+
+    // Locks
+    const lockEl = document.getElementById('locks');
+    if (d.active_locks.length === 0) {
+      lockEl.innerHTML = '<div class="empty">No active locks</div>';
+    } else {
+      lockEl.innerHTML = d.active_locks.map(l => `<div class="lock-row">
+        <span class="lock-icon">&#128274;</span>
+        <strong>${esc(l.resource)}</strong>
+        <span style="color:var(--muted)">held by</span>
+        <span style="color:var(--purple)">${esc(l.agent)}</span>
+        <span style="color:var(--muted);margin-left:auto">${timeAgo(l.acquired_at)}</span>
+      </div>`).join('');
+    }
+
+    // Events
+    const evEl = document.getElementById('events');
+    if (d.recent_events.length === 0) {
+      evEl.innerHTML = '<div class="empty">No events recorded</div>';
+    } else {
+      evEl.innerHTML = [...d.recent_events].reverse().map(e => {
+        const time = e.ts.split('T')[1].split('.')[0];
+        return `<div class="event-row">
+          <span class="event-time">${time}</span>
+          <span class="event-agent">${esc(e.agent)}</span>
+          <span class="event-action">${esc(e.action)}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // Knowledge
+    const kbEl = document.getElementById('knowledge');
+    if (d.knowledge_topics.length === 0) {
+      kbEl.innerHTML = '<div class="empty">No knowledge entries</div>';
+    } else {
+      kbEl.innerHTML = '<div class="kb-list">' +
+        d.knowledge_topics.map(t => `<span class="kb-tag">${esc(t)}</span>`).join('') +
+        '</div>';
+    }
+  } catch (e) {
+    console.error('Refresh failed:', e);
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
