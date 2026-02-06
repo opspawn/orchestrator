@@ -75,6 +75,33 @@
 
   .empty { color: var(--muted); font-size: 13px; font-style: italic; }
 
+  /* Action buttons */
+  .btn { background: var(--border); color: var(--text); border: none; padding: 3px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .btn:hover { background: var(--muted); }
+  .btn-accent { background: var(--accent); color: #000; }
+  .btn-accent:hover { opacity: 0.85; }
+  .btn-green { background: var(--green); color: #000; }
+  .btn-green:hover { opacity: 0.85; }
+  .btn-sm { padding: 2px 6px; font-size: 11px; }
+  .task-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+  /* Inline forms */
+  .inline-form { display: flex; gap: 6px; padding: 8px 0; align-items: center; }
+  .inline-form input, .inline-form select { background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px; font-family: inherit; }
+  .inline-form input:focus, .inline-form select:focus { border-color: var(--accent); outline: none; }
+  .inline-form input[type="text"] { flex: 1; min-width: 120px; }
+  .add-task-btn { margin-top: 6px; }
+
+  /* Modal overlay */
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 100; justify-content: center; align-items: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; width: 400px; max-width: 90vw; }
+  .modal h3 { margin-bottom: 12px; font-size: 16px; }
+  .modal label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; margin-top: 10px; }
+  .modal input, .modal select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 4px; font-size: 13px; font-family: inherit; }
+  .modal input:focus, .modal select:focus { border-color: var(--accent); outline: none; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+
   .summary-row { display: flex; gap: 24px; padding: 16px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .summary-stat { text-align: center; }
   .summary-stat .num { font-size: 28px; font-weight: 700; }
@@ -107,8 +134,39 @@
 
 <div class="grid">
   <div class="card full">
-    <div class="card-header">Workstreams &amp; Tasks</div>
+    <div class="card-header">Workstreams &amp; Tasks <button class="btn btn-accent btn-sm" style="margin-left:auto" onclick="showAddWorkstream()">+ Workstream</button></div>
     <div class="card-body" id="workstreams"><div class="empty">Loading...</div></div>
+  </div>
+
+  <!-- Add Workstream Modal -->
+  <div class="modal-overlay" id="ws-modal" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="modal">
+      <h3>Add Workstream</h3>
+      <label>Name</label>
+      <input type="text" id="ws-name" placeholder="e.g. revenue">
+      <label>Description</label>
+      <input type="text" id="ws-desc" placeholder="Optional description">
+      <label>Priority</label>
+      <select id="ws-priority"><option value="1">P1 - Critical</option><option value="2" selected>P2 - High</option><option value="3">P3 - Medium</option><option value="4">P4 - Low</option></select>
+      <div class="modal-actions">
+        <button class="btn" onclick="document.getElementById('ws-modal').classList.remove('show')">Cancel</button>
+        <button class="btn btn-accent" onclick="createWorkstream()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Claim Task Modal -->
+  <div class="modal-overlay" id="claim-modal" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="modal">
+      <h3>Claim Task</h3>
+      <p id="claim-task-title" style="font-size:13px;color:var(--muted);margin-bottom:8px"></p>
+      <label>Agent Name</label>
+      <input type="text" id="claim-agent" placeholder="e.g. opspawn-main" value="opspawn">
+      <div class="modal-actions">
+        <button class="btn" onclick="document.getElementById('claim-modal').classList.remove('show')">Cancel</button>
+        <button class="btn btn-accent" onclick="claimTask()">Claim</button>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -177,7 +235,19 @@ async function refresh() {
             <span class="task-title ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</span>
             ${t.assigned_to ? `<span class="task-agent">${esc(t.assigned_to)}</span>` : ''}
             <span class="task-id">${t.id}</span>
+            <span class="task-actions">
+              ${t.status === 'pending' ? `<button class="btn btn-accent btn-sm" onclick="showClaim('${esc(ws.name)}','${t.id}','${esc(t.title)}')">Claim</button>` : ''}
+              ${t.status === 'in_progress' ? `<button class="btn btn-green btn-sm" onclick="completeTask('${esc(ws.name)}','${t.id}')">Done</button>` : ''}
+            </span>
           </li>`).join('')}</ul>
+          <div class="add-task-btn">
+            <div id="add-form-${esc(ws.name)}" style="display:none" class="inline-form">
+              <input type="text" id="add-title-${esc(ws.name)}" placeholder="Task title" onkeydown="if(event.key==='Enter')addTask('${esc(ws.name)}')">
+              <button class="btn btn-accent btn-sm" onclick="addTask('${esc(ws.name)}')">Add</button>
+              <button class="btn btn-sm" onclick="hideAddTask('${esc(ws.name)}')">X</button>
+            </div>
+            <button class="btn btn-sm" onclick="showAddTask('${esc(ws.name)}')" id="add-btn-${esc(ws.name)}">+ Add Task</button>
+          </div>
         </div>`;
       }).join('');
     }
@@ -224,6 +294,12 @@ async function refresh() {
       }).join('');
     }
 
+    // Restore open add-task forms after refresh
+    openAddForms.forEach(wsName => {
+      const form = document.getElementById('add-form-' + wsName);
+      if (form) form.style.display = 'flex';
+    });
+
     // Knowledge
     const kbEl = document.getElementById('knowledge');
     if (d.knowledge_topics.length === 0) {
@@ -245,6 +321,88 @@ function timeAgo(iso) {
   if (s < 3600) return Math.floor(s / 60) + 'm ago';
   if (s < 86400) return Math.floor(s / 3600) + 'h ago';
   return Math.floor(s / 86400) + 'd ago';
+}
+
+// State for modals and open forms
+let claimWs = '', claimId = '';
+let openAddForms = new Set(); // track which workstream add-task forms are open
+
+function showAddWorkstream() {
+  document.getElementById('ws-name').value = '';
+  document.getElementById('ws-desc').value = '';
+  document.getElementById('ws-priority').value = '2';
+  document.getElementById('ws-modal').classList.add('show');
+  document.getElementById('ws-name').focus();
+}
+
+async function createWorkstream() {
+  const name = document.getElementById('ws-name').value.trim();
+  if (!name) return;
+  await fetch('/api/workstreams', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      description: document.getElementById('ws-desc').value.trim(),
+      priority: parseInt(document.getElementById('ws-priority').value)
+    })
+  });
+  document.getElementById('ws-modal').classList.remove('show');
+  refresh();
+}
+
+function showAddTask(wsName) {
+  openAddForms.add(wsName);
+  const form = document.getElementById('add-form-' + wsName);
+  if (form) { form.style.display = 'flex'; document.getElementById('add-title-' + wsName).focus(); }
+}
+
+async function addTask(wsName) {
+  const input = document.getElementById('add-title-' + wsName);
+  const title = input.value.trim();
+  if (!title) return;
+  await fetch('/api/workstreams/' + encodeURIComponent(wsName) + '/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+  input.value = '';
+  openAddForms.delete(wsName);
+  refresh();
+}
+
+function hideAddTask(wsName) {
+  openAddForms.delete(wsName);
+  const form = document.getElementById('add-form-' + wsName);
+  if (form) form.style.display = 'none';
+}
+
+function showClaim(wsName, taskId, title) {
+  claimWs = wsName; claimId = taskId;
+  document.getElementById('claim-task-title').textContent = title;
+  document.getElementById('claim-modal').classList.add('show');
+  document.getElementById('claim-agent').focus();
+}
+
+async function claimTask() {
+  const agent = document.getElementById('claim-agent').value.trim();
+  if (!agent) return;
+  await fetch('/api/workstreams/' + encodeURIComponent(claimWs) + '/tasks/' + claimId + '/claim', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent })
+  });
+  document.getElementById('claim-modal').classList.remove('show');
+  refresh();
+}
+
+async function completeTask(wsName, taskId) {
+  await fetch('/api/workstreams/' + encodeURIComponent(wsName) + '/tasks/' + taskId + '/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  });
+  refresh();
 }
 
 refresh();
