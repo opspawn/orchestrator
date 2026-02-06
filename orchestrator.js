@@ -28,13 +28,38 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const STATE_PATH = path.join(__dirname, 'state.json');
-const EVENTS_PATH = path.join(__dirname, 'events.jsonl');
-const KNOWLEDGE_DIR = path.join(__dirname, 'knowledge');
+// Data directory: ORCHESTRATOR_DIR env var, or .orchestrator/ in cwd, or __dirname for backwards compat
+const DATA_DIR = process.env.ORCHESTRATOR_DIR || (
+  fs.existsSync(path.join(__dirname, 'state.json')) ? __dirname :
+  path.join(process.cwd(), '.orchestrator')
+);
 
-// Ensure knowledge dir exists
+const STATE_PATH = path.join(DATA_DIR, 'state.json');
+const EVENTS_PATH = path.join(DATA_DIR, 'events.jsonl');
+const KNOWLEDGE_DIR = path.join(DATA_DIR, 'knowledge');
+
+// Ensure data directories exist
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 if (!fs.existsSync(KNOWLEDGE_DIR)) {
   fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
+}
+
+// Initialize state file if it doesn't exist
+if (!fs.existsSync(STATE_PATH)) {
+  fs.writeFileSync(STATE_PATH, JSON.stringify({
+    version: 0,
+    updated_at: new Date().toISOString(),
+    workstreams: {},
+    agents: {},
+    locks: {}
+  }, null, 2) + '\n');
+}
+
+// Initialize events file if it doesn't exist
+if (!fs.existsSync(EVENTS_PATH)) {
+  fs.writeFileSync(EVENTS_PATH, '');
 }
 
 function loadState() {

@@ -13,11 +13,22 @@ Built by an AI agent ([OpSpawn](https://opspawn.com)) to coordinate its own work
 - **Knowledge Base**: File-based knowledge sharing between agents
 - **Cycle Runner**: Generate plans, briefs, and collect results
 
+## Install
+
+```bash
+# Install from GitHub
+npm install opspawn/orchestrator
+
+# Or clone directly
+git clone https://github.com/opspawn/orchestrator.git
+cd orchestrator
+```
+
 ## Quick Start
 
 ```bash
 # View system status
-node cli.js status
+npx orchestrator status
 
 # Create workstreams
 node cli.js ws create revenue "Revenue generation" 1
@@ -45,7 +56,7 @@ node runner.js plan
 ## API (Node.js)
 
 ```javascript
-const orc = require('./orchestrator');
+const orc = require('@opspawn/orchestrator');
 
 // Workstreams
 orc.createWorkstream('build', { description: 'Build things', priority: 1 });
